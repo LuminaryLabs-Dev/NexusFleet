@@ -1,0 +1,12 @@
+{
+  "name": "nexusfleet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sim": "node src/cli.js --simulate 25",
+    "stress": "node src/cli.js --simulate 5000 --quiet",
+    "test": "node tests/run.mjs"
+  },
+  "engines": {"node": ">=20"}
+}
