@@ -1,5 +1,113 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NexusFleet Simulator</title><link rel="stylesheet" href="./styles.css"></head><body>
-<main><header><div><p class="eyebrow">NEXUSFLEET</p><h1>Deployment Factory</h1><p id="mode">Simulation mode</p></div><div class="actions"><button id="add">+ Add headset</button><button id="add50">+ 50</button><button id="deploy">Deploy all</button></div></header>
-<section class="stats"><article><span>Total</span><strong id="total">0</strong></article><article><span>Complete</span><strong id="complete">0</strong></article><article><span>Active</span><strong id="active">0</strong></article><article><span>Failed</span><strong id="failed">0</strong></article></section>
-<section><div class="section-title"><h2>Headsets</h2><span>Reboot Quest Kiosk</span></div><div id="devices" class="devices"></div></section></main>
-<script>window.NEXUS_FLEET_SIMULATION=true;</script><script type="module" src="./app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="NexusFleet simulated Quest deployment console for Reboot.">
+  <title>NexusFleet — Reboot Deployment Simulator</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell-layout">
+    <header class="topbar">
+      <div>
+        <div class="brand-row">
+          <p class="eyebrow">NEXUSFLEET</p>
+          <span class="mode-badge">SIMULATION MODE</span>
+        </div>
+        <h1>Reboot Deployment Console</h1>
+        <p class="subhead">Practice the operator flow without touching a real headset, Meta account, or ArborXR tenant.</p>
+      </div>
+      <div class="header-actions">
+        <button class="secondary" id="add">+ Add simulated headset</button>
+        <button class="secondary" id="add10">+ Add 10</button>
+        <button class="primary" id="deploy">Deploy ready devices</button>
+      </div>
+    </header>
+
+    <section class="stats" aria-label="Fleet summary">
+      <article><span>Total devices</span><strong id="total">0</strong><small>tracked jobs</small></article>
+      <article><span>Completed</span><strong id="complete">0</strong><small>ready for kiosk</small></article>
+      <article><span>In progress</span><strong id="active">0</strong><small>async jobs</small></article>
+      <article><span>Needs attention</span><strong id="failed">0</strong><small>retryable failures</small></article>
+    </section>
+
+    <section class="operator-flow panel">
+      <div class="panel-heading">
+        <div><p class="eyebrow">OPERATOR FLOW</p><h2>What the person does</h2></div>
+        <span class="profile-pill">Reboot Quest Kiosk</span>
+      </div>
+      <div class="flow-grid">
+        <div class="flow-step"><b>1</b><div><strong>Plug in</strong><span>USB connects the headset</span></div></div>
+        <div class="flow-step"><b>2</b><div><strong>Fastboot</strong><span>Power + Volume Down</span></div></div>
+        <div class="flow-step"><b>3</b><div><strong>Deploy</strong><span>NexusFleet starts the job</span></div></div>
+        <div class="flow-step"><b>4</b><div><strong>Move on</strong><span>Job finishes asynchronously</span></div></div>
+      </div>
+    </section>
+
+    <div class="workspace-grid">
+      <section class="panel fleet-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">FLEET</p><h2>Simulated headsets</h2></div>
+          <div class="legend"><span><i class="dot ready"></i>Ready</span><span><i class="dot done"></i>Done</span><span><i class="dot failed"></i>Failed</span></div>
+        </div>
+        <div id="devices" class="devices" role="list"></div>
+      </section>
+
+      <aside class="right-column">
+        <section class="panel inspector-panel">
+          <div class="panel-heading compact">
+            <div><p class="eyebrow">SELECTED DEVICE</p><h2 id="selected-title">No headset selected</h2></div>
+          </div>
+          <div id="selected-empty" class="empty-state">Select a headset to inspect its simulated deployment job.</div>
+          <div id="selected-detail" class="selected-detail hidden">
+            <dl>
+              <div><dt>Model</dt><dd id="selected-model">—</dd></div>
+              <div><dt>State</dt><dd id="selected-state">—</dd></div>
+              <div><dt>Profile</dt><dd id="selected-profile">—</dd></div>
+              <div><dt>Packages</dt><dd id="selected-packages">0</dd></div>
+            </dl>
+            <div class="device-actions">
+              <button id="fastboot" class="secondary">Simulate Fastboot</button>
+              <button id="deploy-one" class="primary">Deploy this headset</button>
+              <button id="retry-one" class="secondary hidden">Retry job</button>
+            </div>
+            <div class="timeline-wrap">
+              <span>Job timeline</span>
+              <div id="timeline" class="timeline"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel terminal-panel">
+          <div class="panel-heading compact">
+            <div><p class="eyebrow">OFFLINE VALIDATOR</p><h2>ADB / Fastboot shell</h2></div>
+            <button id="clear-terminal" class="ghost">Clear</button>
+          </div>
+          <p class="terminal-help">Runs against the simulated devices using the same command shapes we will use with real Android Platform Tools.</p>
+          <div class="quick-commands" id="quick-commands">
+            <button data-command="adb devices">adb devices</button>
+            <button data-command="fastboot devices">fastboot devices</button>
+            <button data-command="adb -s $SERIAL shell getprop ro.product.model">get model</button>
+            <button data-command="adb -s $SERIAL shell pm list packages">list packages</button>
+            <button data-command="adb -s $SERIAL install reboot-demo.apk">install demo APK</button>
+          </div>
+          <pre id="terminal-output" class="terminal-output" aria-live="polite">NexusFleet offline shell ready.\nType help for examples.</pre>
+          <form id="terminal-form" class="terminal-form">
+            <span>$</span>
+            <input id="terminal-input" autocomplete="off" spellcheck="false" placeholder="adb devices" aria-label="ADB or Fastboot command">
+            <button class="primary" type="submit">Run</button>
+          </form>
+        </section>
+      </aside>
+    </div>
+
+    <footer>
+      <span>NexusFleet simulation only — no real Meta enrollment or ArborXR changes are performed.</span>
+      <span id="build-mode">public demo</span>
+    </footer>
+  </main>
+  <script>window.NEXUS_FLEET_SIMULATION = true;</script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
