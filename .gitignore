@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+release/
+dist/
+sidecars/python/build/
+sidecars/python/dist/nexusfleet-sidecar*
+sidecars/python/__pycache__/
+sidecars/python/nexusfleet_sidecar/__pycache__/
+sidecars/python/tests/__pycache__/
+*.tsbuildinfo

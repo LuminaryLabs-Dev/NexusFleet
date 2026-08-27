@@ -1,12 +1,55 @@
 {
   "name": "nexusfleet",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "Local-first Meta Quest fleet simulation, deployment, and diagnostics desktop app.",
+  "author": "Luminary Labs",
   "private": true,
   "type": "module",
+  "main": "desktop/main.mjs",
   "scripts": {
+    "dev": "next dev",
+    "dev:desktop": "node scripts/dev-desktop.mjs",
     "sim": "node src/cli.js --simulate 25",
     "stress": "node src/cli.js --simulate 5000 --quiet",
-    "test": "node tests/run.mjs"
+    "test": "node tests/run.mjs && node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build:web": "node scripts/clean-output.mjs && next build",
+    "build": "npm run test && npm run typecheck && npm run build:web",
+    "desktop": "electron .",
+    "pack:dir": "npm run build && npm run sidecar:build && electron-builder --dir",
+    "pack": "npm run build && npm run sidecar:build && electron-builder",
+    "sidecar:build": "node scripts/build-sidecar.mjs",
+    "sidecar:test": "cd sidecars/python && python3 -m unittest discover tests",
+    "verify:package": "node scripts/verify-package.mjs"
   },
-  "engines": {"node": ">=20"}
+  "dependencies": {
+    "@devicefarmer/adbkit-apkreader": "3.2.4",
+    "next": "16.3.3",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "@types/react": "19.1.11",
+    "@types/react-dom": "19.1.7",
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3",
+    "typescript": "5.9.2"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "build": {
+    "appId": "dev.luminarylabs.nexusfleet",
+    "productName": "NexusFleet",
+    "asar": true,
+    "files": ["desktop/**/*", "packages/**/*", "src/**/*", "out/**/*", "package.json"],
+    "extraResources": [
+      { "from": "resources/platform-tools", "to": "platform-tools", "filter": ["**/*"] },
+      { "from": "sidecars/python/dist", "to": "sidecars", "filter": ["**/*"] }
+    ],
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools" },
+    "win": { "target": ["nsis", "portable"] },
+    "linux": { "target": ["AppImage"], "category": "Development" }
+  }
 }

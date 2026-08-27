@@ -28,23 +28,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Validate simulator
         run: npm test
 
       - name: Build simulation site
+        env:
+          NEXUSFLEET_BASE_PATH: /NexusFleet
         run: |
-          rm -rf dist
-          mkdir -p dist/src/core dist/src/adapters dist/src/runtime
-          cp web/index.html web/app.js web/styles.css dist/
-          cp src/core/device.js src/core/fleet-engine.js dist/src/core/
-          cp src/adapters/mock-adb.js src/adapters/mock-fastboot.js dist/src/adapters/
-          cp src/runtime/command-surface.js dist/src/runtime/
-          sed -i "s|'../src/core/|'./src/core/|g" dist/app.js
-          sed -i "s|'../src/adapters/|'./src/adapters/|g" dist/app.js
-          sed -i "s|'../src/runtime/|'./src/runtime/|g" dist/app.js
-          printf '%s\n' '{"simulation":true,"profile":"reboot-quest-kiosk","realDeviceWrites":false}' > dist/simulation.json
-          touch dist/.nojekyll
+          npm run build:web
+          printf '%s\n' '{"simulation":true,"profile":"reboot-quest-kiosk","realDeviceWrites":false}' > out/simulation.json
+          touch out/.nojekyll
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -52,7 +50,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: out
 
       - name: Deploy Pages
         id: deployment
