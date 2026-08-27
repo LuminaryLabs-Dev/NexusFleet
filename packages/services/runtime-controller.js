@@ -1,38 +1,47 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FleetEngine } from '../../src/core/fleet-engine.js';
 import { ToolResolver } from '../tooling/tool-resolver.js';
 import { AdbAdapter } from '../adapters/local/adb-adapter.js';
+import { QuestTwinAdapter } from '../adapters/simulated/quest-twin-adapter.js';
 import { inspectApk } from '../adapters/local/apk-inspector.js';
 import { JobQueue } from '../jobs/job-queue.js';
 import { SidecarManager } from '../sidecar/sidecar-manager.js';
 import { validatePackageName, validateSerial } from '../tooling/command-policy.js';
 import { JsonStore } from '../storage/json-store.js';
+import { QuestTwinManager } from '../simulator/quest-twin-manager.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 export class RuntimeController {
   constructor({ resourcesPath, userDataPath }) {
     this.mode = 'simulation'; this.resourcesPath = resourcesPath; this.userDataPath = userDataPath;
-    this.devices = new Map(); this.deviceListeners = new Set(); this.sequence = 0; this.adb = null; this.adbPath = null;
+    this.devices = new Map(); this.deviceListeners = new Set(); this.adb = null; this.adbPath = null;
     this.jobs = new JobQueue({ concurrency: 4 });
     this.sidecar = new SidecarManager({ resourcesPath, repositoryRoot });
     this.store = new JsonStore(path.join(userDataPath, 'settings.json'), { mode: 'simulation' });
-    this.engine = new FleetEngine({ seed: 42, failureRate: 0.03 });
-    this.engine.onChange(() => this.#syncSimulation());
-    for (let index = 0; index < 6; index += 1) this.#addSimulationDevice();
+    this.twinManager = new QuestTwinManager({ repositoryRoot, userDataPath: path.join(userDataPath, 'quest-twin') });
+    this.simulationAdb = new QuestTwinAdapter({ client: this.twinManager });
   }
   async initialize() {
     const settings = await this.store.load();
     if (['simulation', 'local', 'managed'].includes(settings.mode)) this.mode = settings.mode;
-    if (this.mode === 'local') {
+    if (this.mode === 'simulation') await this.#initializeSimulation();
+    else if (this.mode === 'local') {
       try { await this.refreshDevices(); } catch { this.devices.clear(); }
-    } else this.#syncSimulation();
+    } else this.devices.clear();
   }
   subscribeDevices(listener) { this.deviceListeners.add(listener); return () => this.deviceListeners.delete(listener); }
   subscribeJobs(listener) { return this.jobs.subscribe(listener); }
   async status() {
-    if (this.mode === 'simulation') return { mode: this.mode, ready: true, message: 'Simulation active', sidecarAvailable: false };
+    if (this.mode === 'simulation') {
+      try {
+        const health = await this.twinManager.health();
+        const endpoint = this.twinManager.endpoint ? `${this.twinManager.endpoint.host}:${this.twinManager.endpoint.port}` : null;
+        return { mode: this.mode, ready: true, message: 'Quest Device Twin active', twinEndpoint: endpoint, twinPid: health.pid, sidecarAvailable: false };
+      } catch (error) {
+        return { mode: this.mode, ready: false, message: error.message, twinEndpoint: null, sidecarAvailable: false };
+      }
+    }
     if (this.mode === 'managed') return { mode: this.mode, ready: false, message: 'Managed fleet adapter is reserved for ArborXR/HMS integration.', sidecarAvailable: false };
     try { await this.#ensureAdb(); return { mode: this.mode, ready: true, message: `ADB ready (${this.adbPath.source})`, adbPath: this.adbPath.path, sidecarAvailable: false }; }
     catch (error) { return { mode: this.mode, ready: false, message: error.message, adbPath: null, sidecarAvailable: false }; }
@@ -41,17 +50,32 @@ export class RuntimeController {
     if (!['simulation', 'local', 'managed'].includes(mode)) throw new Error('Unsupported runtime mode.');
     this.mode = mode;
     await this.store.set('mode', mode);
-    if (mode === 'simulation') this.#syncSimulation(); else this.devices.clear();
+    if (mode === 'simulation') await this.#initializeSimulation();
+    else this.devices.clear();
     if (mode === 'local') {
       try { await this.refreshDevices(); } catch { this.devices.clear(); this.#emitDevices(); }
     } else this.#emitDevices();
     return this.status();
   }
-  async connectWifi(endpoint) { if (this.mode === 'simulation') return `Simulated Wi-Fi connection to ${endpoint}`; if (this.mode === 'managed') throw new Error('Managed fleet connection is not implemented.'); await this.#ensureAdb(); const result = await this.adb.connectWifi(endpoint); await this.refreshDevices(); return result; }
-  async disconnectWifi(endpoint) { if (this.mode === 'simulation') return; if (this.mode === 'managed') throw new Error('Managed fleet connection is not implemented.'); await this.#ensureAdb(); await this.adb.disconnectWifi(endpoint); await this.refreshDevices(); }
+  async connectWifi(endpoint) {
+    if (this.mode === 'managed') throw new Error('Managed fleet connection is not implemented.');
+    if (this.mode === 'simulation') {
+      const serial = this.devices.keys().next().value;
+      const result = await this.simulationAdb.connectWifi(endpoint, serial);
+      await this.#refreshSimulation();
+      return result;
+    }
+    await this.#ensureAdb(); const result = await this.adb.connectWifi(endpoint); await this.refreshDevices(); return result;
+  }
+  async disconnectWifi(endpoint) {
+    if (this.mode === 'managed') throw new Error('Managed fleet connection is not implemented.');
+    if (this.mode === 'simulation') { await this.simulationAdb.disconnectWifi(endpoint); await this.#refreshSimulation(); return; }
+    await this.#ensureAdb(); await this.adb.disconnectWifi(endpoint); await this.refreshDevices();
+  }
   listDevices() { return structuredClone([...this.devices.values()]); }
   inspectDevice(serial) { validateSerial(serial); const device = this.devices.get(serial); if (!device) throw new Error(`Unknown device ${serial}`); return structuredClone(device); }
   async refreshDevices() {
+    if (this.mode === 'simulation') return this.#refreshSimulation();
     if (this.mode !== 'local') return this.listDevices();
     await this.#ensureAdb();
     const found = await this.adb.listDevices();
@@ -70,16 +94,22 @@ export class RuntimeController {
     }
     this.devices = next; this.#emitDevices(); return this.listDevices();
   }
-  addSimulated(count = 1) {
+  async addSimulated(count = 1) {
     if (this.mode !== 'simulation') throw new Error('Switch to Simulation mode before adding virtual headsets.');
-    for (let index = 0; index < count; index += 1) this.#addSimulationDevice();
-    return this.listDevices();
+    await this.simulationAdb.addDevices(count);
+    return this.#refreshSimulation();
   }
   deploy(serial) {
     const targets = serial ? [serial] : [...this.devices.keys()];
     if (this.mode === 'managed') throw new Error('Managed fleet deployment is not implemented.');
     return targets.map(target => this.jobs.enqueue({ type: 'deploy', serial: target, operation: async ({ update }) => {
-      if (this.mode === 'simulation') { await this.engine.deploy(target, { delayMs: 90 }); return { message: 'Deployment complete' }; }
+      if (this.mode === 'simulation') {
+        update(0.2, 'Running Quest Twin deployment');
+        const result = await this.simulationAdb.deploy(target);
+        await this.#refreshSimulation();
+        update(1, result.message);
+        return result;
+      }
       update(0.3, 'Checking connection'); await this.adb.inspectDevice(target); update(1, 'Device verified'); return { message: 'Local deployment check complete' };
     }}));
   }
@@ -89,41 +119,61 @@ export class RuntimeController {
     if (this.mode === 'managed') throw new Error('Managed fleet installation is not implemented.');
     return this.jobs.enqueue({ type: 'install', serial, operation: async ({ signal, update }) => {
       update(0.1, 'Inspecting APK'); const metadata = await inspectApk(apkPath); update(0.25, 'Installing APK');
-      if (this.mode === 'simulation') { const device = this.devices.get(serial); if (!device.packages.includes(metadata.packageName)) device.packages.push(metadata.packageName); this.#emitDevices(); }
+      if (this.mode === 'simulation') { await this.simulationAdb.install(serial, apkPath, { packageName: metadata.packageName }); await this.#refreshSimulation(); }
       else { await this.#ensureAdb(); await this.adb.install(serial, apkPath, { signal }); await this.refreshDevices(); }
       return { message: `${metadata.packageName} installed`, packageName: metadata.packageName || packageName };
     }});
   }
-  launch({ serial, packageName }) { return this.#packageJob('launch', serial, packageName, () => this.adb.launch(serial, packageName)); }
-  stop({ serial, packageName }) { return this.#packageJob('stop', serial, packageName, () => this.adb.stop(serial, packageName)); }
-  uninstall({ serial, packageName }) { return this.#packageJob('uninstall', serial, packageName, async () => { await this.adb.uninstall(serial, packageName); await this.refreshDevices(); }); }
+  launch({ serial, packageName }) { return this.#packageJob('launch', serial, packageName); }
+  stop({ serial, packageName }) { return this.#packageJob('stop', serial, packageName); }
+  uninstall({ serial, packageName }) { return this.#packageJob('uninstall', serial, packageName); }
   async readInfo(serial) {
     const device = this.inspectDevice(serial);
-    if (this.mode === 'simulation') return `Serial: ${device.serial}\nModel: ${device.model}\nConnection: Simulation`;
+    if (this.mode === 'simulation') {
+      const details = await this.simulationAdb.inspectDevice(serial);
+      return `Serial: ${details.serial}\nModel: ${details.model}\nOS: ${details.osVersion}\nBattery: ${details.battery}%\nConnection: Quest Twin`;
+    }
     const details = await this.adb.inspectDevice(serial);
     return `Serial: ${details.serial}\nModel: ${details.model}\nOS: ${details.osVersion}\nBattery: ${details.battery ?? 'Unknown'}%`;
   }
-  async readLogs(serial) { validateSerial(serial); return this.mode === 'simulation' ? [`${serial}: simulated log stream ready`, `${serial}: no physical headset changed`] : this.adb.readLogs(serial); }
-  async screenshot(serial) { validateSerial(serial); return this.mode === 'simulation' ? `simulation://${serial}/screenshot.png` : this.adb.screenshotToTemp(serial); }
+  async readLogs(serial) { validateSerial(serial); return this.mode === 'simulation' ? this.simulationAdb.readLogs(serial) : this.adb.readLogs(serial); }
+  async screenshot(serial) { validateSerial(serial); return this.mode === 'simulation' ? this.simulationAdb.screenshotToTemp(serial) : this.adb.screenshotToTemp(serial); }
   sidecarHealth() { return this.sidecar.health(); }
-  shutdown() { this.jobs.shutdown(); return this.sidecar.shutdown(); }
+  async shutdown() { this.jobs.shutdown(); await Promise.all([this.sidecar.shutdown(), this.twinManager.shutdown()]); }
   async #ensureAdb() { if (this.adb) return; this.adbPath = await new ToolResolver({ resourcesPath: this.resourcesPath, allowSystemTools: true }).resolve('adb'); this.adb = new AdbAdapter({ executable: this.adbPath.path }); }
-  #packageJob(type, serial, packageName, localOperation) {
+  #packageJob(type, serial, packageName) {
     validateSerial(serial); validatePackageName(packageName);
     if (this.mode === 'managed') throw new Error('Managed fleet application operations are not implemented.');
     return this.jobs.enqueue({ type, serial, operation: async () => {
-      if (this.mode !== 'simulation') { await this.#ensureAdb(); await localOperation(); }
-      else if (type === 'uninstall') { const device = this.devices.get(serial); device.packages = device.packages.filter(value => value !== packageName); this.#emitDevices(); }
+      if (this.mode === 'simulation') {
+        const method = type === 'stop' ? 'stopPackage' : type;
+        await this.simulationAdb[method](serial, packageName);
+        await this.#refreshSimulation();
+      } else {
+        await this.#ensureAdb();
+        await this.adb[type](serial, packageName);
+        if (type === 'uninstall') await this.refreshDevices();
+      }
       return { message: `${packageName} ${type === 'uninstall' ? 'removed' : `${type}ed`}` };
     }});
   }
-  #addSimulationDevice() { this.sequence += 1; this.engine.addDevice({ serial: `REBOOT-${String(this.sequence).padStart(4, '0')}`, model: this.sequence % 3 === 0 ? 'Quest 3' : 'Quest 3S' }); }
-  #syncSimulation() {
-    if (this.mode !== 'simulation') return;
-    this.devices = new Map([...this.engine.devices.values()].map(device => [device.serial, {
-      serial: device.serial, model: device.model, state: device.state, connectionState: 'simulated', connection: 'simulation', profile: 'Reboot Quest Kiosk', packages: [...device.packages], history: [...device.history], error: device.error
+  async #initializeSimulation() { await this.simulationAdb.start({ deviceCount: 6, seed: 42 }); await this.#refreshSimulation(); }
+  async #refreshSimulation() {
+    const snapshot = await this.simulationAdb.inspect();
+    this.devices = new Map(snapshot.devices.map(device => [device.serial, {
+      serial: device.serial,
+      model: device.model,
+      state: device.state,
+      connectionState: device.connectionState,
+      connection: device.connection,
+      profile: device.profile,
+      packages: [...device.packages],
+      history: [...device.history],
+      battery: device.battery,
+      error: device.error
     }]));
     this.#emitDevices();
+    return this.listDevices();
   }
   #emitDevices() { const snapshot = this.listDevices(); for (const listener of this.deviceListeners) listener(snapshot); }
 }

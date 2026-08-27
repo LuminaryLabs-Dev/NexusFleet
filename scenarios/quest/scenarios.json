@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "name": "usb-authorization-flap",
+      "seed": 1,
+      "events": [
+        { "at": 0, "type": "usb.connected", "target": "TWIN-0001", "payload": { "authorized": false } },
+        { "at": 500, "type": "adb.unauthorized", "target": "TWIN-0001", "payload": {} },
+        { "at": 4000, "type": "usb.disconnected", "target": "TWIN-0001", "payload": {} },
+        { "at": 6500, "type": "usb.connected", "target": "TWIN-0001", "payload": { "authorized": false } },
+        { "at": 9000, "type": "adb.authorized", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "rsa-rejected",
+      "seed": 2,
+      "events": [
+        { "at": 0, "type": "adb.unauthorized", "target": "TWIN-0001", "payload": {} },
+        { "at": 3000, "type": "adb.authorization.rejected", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "usb-cable-flap",
+      "seed": 3,
+      "events": [
+        { "at": 250, "type": "usb.disconnected", "target": "TWIN-0001", "payload": {} },
+        { "at": 500, "type": "usb.connected", "target": "TWIN-0001", "payload": { "authorized": true } },
+        { "at": 750, "type": "usb.disconnected", "target": "TWIN-0001", "payload": {} },
+        { "at": 1000, "type": "usb.connected", "target": "TWIN-0001", "payload": { "authorized": true } }
+      ]
+    },
+    {
+      "name": "adb-offline-recovery",
+      "seed": 4,
+      "events": [
+        { "at": 0, "type": "adb.offline", "target": "TWIN-0001", "payload": {} },
+        { "at": 5000, "type": "adb.daemon.ready", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "adb-daemon-restart",
+      "seed": 5,
+      "events": [
+        { "at": 0, "type": "adb.daemon.restart", "target": "*", "payload": {} },
+        { "at": 2500, "type": "adb.daemon.ready", "target": "*", "payload": {} }
+      ]
+    },
+    {
+      "name": "slow-boot",
+      "seed": 6,
+      "events": [
+        { "at": 0, "type": "device.reboot", "target": "TWIN-0001", "payload": {} },
+        { "at": 30000, "type": "device.booted", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "boot-loop",
+      "seed": 7,
+      "events": [
+        { "at": 0, "type": "device.reboot", "target": "TWIN-0001", "payload": {} },
+        { "at": 3000, "type": "device.booted", "target": "TWIN-0001", "payload": {} },
+        { "at": 3500, "type": "device.reboot", "target": "TWIN-0001", "payload": {} },
+        { "at": 7000, "type": "device.booted", "target": "TWIN-0001", "payload": {} },
+        { "at": 7500, "type": "device.reboot", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "fastboot-handoff",
+      "seed": 8,
+      "events": [
+        { "at": 0, "type": "fastboot.entered", "target": "TWIN-0001", "payload": {} },
+        { "at": 5000, "type": "device.reboot", "target": "TWIN-0001", "payload": {} },
+        { "at": 9000, "type": "device.booted", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "recovery-mode",
+      "seed": 9,
+      "events": [
+        { "at": 0, "type": "recovery.entered", "target": "TWIN-0001", "payload": {} },
+        { "at": 8000, "type": "device.reboot", "target": "TWIN-0001", "payload": {} },
+        { "at": 12000, "type": "device.booted", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "wifi-drop",
+      "seed": 10,
+      "events": [
+        { "at": 0, "type": "wifi.connected", "target": "TWIN-0001", "payload": { "endpoint": "192.168.1.20:5555" } },
+        { "at": 4000, "type": "wifi.disconnected", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "wifi-ip-change",
+      "seed": 11,
+      "events": [
+        { "at": 0, "type": "wifi.connected", "target": "TWIN-0001", "payload": { "endpoint": "192.168.1.20:5555" } },
+        { "at": 5000, "type": "wifi.disconnected", "target": "TWIN-0001", "payload": {} },
+        { "at": 8000, "type": "wifi.connected", "target": "TWIN-0001", "payload": { "endpoint": "192.168.1.44:5555" } }
+      ]
+    },
+    {
+      "name": "wifi-command-timeout",
+      "seed": 12,
+      "events": [
+        { "at": 0, "type": "fault.command-timeout", "target": "TWIN-0001", "payload": { "persistent": true } }
+      ]
+    },
+    {
+      "name": "install-timeout",
+      "seed": 13,
+      "events": [
+        { "at": 0, "type": "fault.install-timeout", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "storage-full",
+      "seed": 14,
+      "events": [
+        { "at": 0, "type": "fault.storage-full", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "incompatible-apk",
+      "seed": 15,
+      "events": [
+        { "at": 0, "type": "fault.incompatible-apk", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "signature-mismatch",
+      "seed": 16,
+      "events": [
+        { "at": 0, "type": "fault.signature-mismatch", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "version-downgrade",
+      "seed": 17,
+      "events": [
+        { "at": 0, "type": "fault.version-downgrade", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "launch-failure",
+      "seed": 18,
+      "events": [
+        { "at": 0, "type": "fault.launch-failure", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "screenshot-failure",
+      "seed": 19,
+      "events": [
+        { "at": 0, "type": "fault.screenshot-failure", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "log-overflow",
+      "seed": 20,
+      "events": [
+        { "at": 0, "type": "fault.log-overflow", "target": "TWIN-0001", "payload": {} }
+      ]
+    },
+    {
+      "name": "app-crash",
+      "seed": 21,
+      "events": [
+        { "at": 5000, "type": "app.crashed", "target": "TWIN-0001", "payload": { "packageName": "dev.luminarylabs.reboot", "message": "Simulated native crash" } }
+      ]
+    },
+    {
+      "name": "battery-critical",
+      "seed": 22,
+      "events": [
+        { "at": 0, "type": "battery.set", "target": "TWIN-0001", "payload": { "level": 4 } },
+        { "at": 5000, "type": "device.error", "target": "TWIN-0001", "payload": { "message": "Critical battery shutdown risk" } }
+      ]
+    },
+    {
+      "name": "reconnect-storm",
+      "seed": 23,
+      "events": [
+        { "at": 100, "type": "usb.disconnected", "target": "*", "payload": {} },
+        { "at": 200, "type": "usb.connected", "target": "*", "payload": { "authorized": true } },
+        { "at": 300, "type": "adb.offline", "target": "*", "payload": {} },
+        { "at": 400, "type": "adb.daemon.ready", "target": "*", "payload": {} },
+        { "at": 500, "type": "usb.disconnected", "target": "*", "payload": {} },
+        { "at": 600, "type": "usb.connected", "target": "*", "payload": { "authorized": true } }
+      ]
+    },
+    {
+      "name": "multiple-device-contention",
+      "seed": 24,
+      "events": [
+        { "at": 0, "type": "adb.offline", "target": "TWIN-0001", "payload": {} },
+        { "at": 0, "type": "adb.unauthorized", "target": "TWIN-0002", "payload": {} },
+        { "at": 4000, "type": "adb.daemon.ready", "target": "TWIN-0001", "payload": {} },
+        { "at": 6000, "type": "adb.authorized", "target": "TWIN-0002", "payload": {} }
+      ]
+    },
+    {
+      "name": "serial-changed",
+      "seed": 25,
+      "events": [
+        { "at": 3000, "type": "serial.changed", "target": "TWIN-0001", "payload": { "serial": "TWIN-REENUM-0001" } }
+      ]
+    },
+    {
+      "name": "provider-rate-limit",
+      "seed": 26,
+      "events": [
+        { "at": 0, "type": "managed.rate-limited", "target": "*", "payload": { "message": "Simulated ArborXR rate limit" } },
+        { "at": 60000, "type": "managed.available", "target": "*", "payload": {} }
+      ]
+    },
+    {
+      "name": "provider-auth-expired",
+      "seed": 27,
+      "events": [
+        { "at": 0, "type": "managed.auth-expired", "target": "*", "payload": { "message": "Simulated managed-provider token expiration" } }
+      ]
+    },
+    {
+      "name": "unauthorized-fleet",
+      "seed": 28,
+      "events": [
+        { "at": 0, "type": "adb.unauthorized", "target": "*", "payload": {} },
+        { "at": 12000, "type": "adb.authorized", "target": "*", "payload": {} }
+      ]
+    },
+    {
+      "name": "command-timeout-storm",
+      "seed": 29,
+      "events": [
+        { "at": 0, "type": "fault.command-timeout", "target": "*", "payload": { "persistent": true, "message": "Simulated fleet-wide command timeout" } }
+      ]
+    },
+    {
+      "name": "mixed-fleet-chaos",
+      "seed": 30,
+      "events": [
+        { "at": 0, "type": "adb.unauthorized", "target": "TWIN-0001", "payload": {} },
+        { "at": 250, "type": "usb.disconnected", "target": "TWIN-0002", "payload": {} },
+        { "at": 500, "type": "adb.offline", "target": "TWIN-0003", "payload": {} },
+        { "at": 750, "type": "fault.storage-full", "target": "TWIN-0004", "payload": {} },
+        { "at": 1000, "type": "wifi.connected", "target": "TWIN-0005", "payload": { "endpoint": "10.0.0.25:5555" } },
+        { "at": 1250, "type": "fault.launch-failure", "target": "TWIN-0006", "payload": {} },
+        { "at": 5000, "type": "adb.authorized", "target": "TWIN-0001", "payload": {} },
+        { "at": 5500, "type": "usb.connected", "target": "TWIN-0002", "payload": { "authorized": true } },
+        { "at": 6000, "type": "adb.daemon.ready", "target": "TWIN-0003", "payload": {} }
+      ]
+    }
+  ]
+}

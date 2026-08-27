@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Added a supervised, deterministic Quest Device Twin process behind the shared device adapter contract.
+- Added virtual time, fault injection, bounded sanitized traces, trace replay and 30 initial failure scenarios.
+- Added an official-SDK MCP gateway with six allowlisted simulation tools.
+- Routed Electron simulation operations through the Twin while preserving the real local ADB adapter.
+- Added crash recovery with state restoration and desktop renderer hydration smoke validation.
+- Replaced packaged `file:` loading with a private loopback static server for reliable Next.js hydration.
+
 ## 0.2.0
 
 - Replaced the plain browser shell with a statically exported Next.js application.

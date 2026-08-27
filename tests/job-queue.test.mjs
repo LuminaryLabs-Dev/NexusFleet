@@ -15,3 +15,23 @@ test('job queue deduplicates active device operations and completes them', async
   await done;
   assert.equal(queue.list()[0].status, 'completed');
 });
+
+test('job queue preserves cancellation while an adapter operation unwinds', async () => {
+  const queue = new JobQueue({ concurrency: 1 });
+  let release;
+  const operationBlocked = new Promise(resolve => { release = resolve; });
+  const running = new Promise(resolve => {
+    const stop = queue.subscribe(jobs => {
+      if (jobs[0]?.status === 'running') { stop(); resolve(jobs[0]); }
+    });
+  });
+  const job = queue.enqueue({
+    type: 'deploy', serial: 'TWIN-0001',
+    operation: async ({ signal }) => { await operationBlocked; assert.equal(signal.aborted, true); return { message: 'late completion' }; }
+  });
+  await running;
+  queue.cancel(job.id);
+  release();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(queue.list()[0].status, 'cancelled');
+});

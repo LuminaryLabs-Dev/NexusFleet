@@ -20,10 +20,13 @@
     "pack": "npm run build && npm run sidecar:build && electron-builder",
     "sidecar:build": "node scripts/build-sidecar.mjs",
     "sidecar:test": "cd sidecars/python && python3 -m unittest discover tests",
+    "twin:test": "node --test tests/quest-twin*.test.mjs tests/runtime-twin.test.mjs",
+    "twin:mcp": "node packages/mcp/quest-twin-server.mjs",
     "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
     "@devicefarmer/adbkit-apkreader": "3.2.4",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "next": "16.3.3",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -43,13 +46,48 @@
     "appId": "dev.luminarylabs.nexusfleet",
     "productName": "NexusFleet",
     "asar": true,
-    "files": ["desktop/**/*", "packages/**/*", "src/**/*", "out/**/*", "package.json"],
-    "extraResources": [
-      { "from": "resources/platform-tools", "to": "platform-tools", "filter": ["**/*"] },
-      { "from": "sidecars/python/dist", "to": "sidecars", "filter": ["**/*"] }
+    "files": [
+      "desktop/**/*",
+      "packages/**/*",
+      "scenarios/**/*",
+      "src/**/*",
+      "out/**/*",
+      "package.json"
     ],
-    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools" },
-    "win": { "target": ["nsis", "portable"] },
-    "linux": { "target": ["AppImage"], "category": "Development" }
+    "extraResources": [
+      {
+        "from": "resources/platform-tools",
+        "to": "platform-tools",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "sidecars/python/dist",
+        "to": "sidecars",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
   }
 }

@@ -10,4 +10,6 @@ test('Electron renderer boundary stays isolated and exposes no raw command chann
   assert.match(main, /sandbox:\s*true/);
   assert.doesNotMatch(preload, /child_process|exec\(|spawn\(/);
   assert.doesNotMatch(preload, /runCommand|rawCommand|shellCommand/);
+  assert.match(main, /Electron renderer hydrated with Quest Device Twin/);
+  assert.doesNotMatch(main, /loadFile\(/);
 });
